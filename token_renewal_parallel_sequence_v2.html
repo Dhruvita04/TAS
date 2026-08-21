@@ -1,0 +1,78 @@
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Sequence diagram showing the eMandate and Ecom phases of token renewal running in parallel, with the Ecom branch ending in a reconciliation step for eMandate tokens still pending</h2>
+<div id="seq"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"anthropic-sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"anthropic-sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+    actorBkg: dark ? '#3C3489' : '#EEEDFE',
+    actorBorder: dark ? '#AFA9EC' : '#534AB7',
+    actorTextColor: dark ? '#CECBF6' : '#26215C',
+    signalColor: dark ? '#9c9a92' : '#73726c',
+    signalTextColor: dark ? '#c2c0b6' : '#3d3d3a',
+    noteBkgColor: dark ? '#085041' : '#E1F5EE',
+    noteBorderColor: dark ? '#5DCAA5' : '#0F6E56',
+    noteTextColor: dark ? '#9FE1CB' : '#04342C',
+    labelBoxBkgColor: dark ? '#3C3489' : '#EEEDFE',
+    labelBoxBorderColor: dark ? '#AFA9EC' : '#534AB7',
+    labelTextColor: dark ? '#CECBF6' : '#26215C',
+  },
+});
+const src = `sequenceDiagram
+    participant User
+    participant Issuer
+    participant TAS
+    participant SiHub
+    participant TSP
+    Issuer->>TAS: 1 Initiate token mapping
+    TAS->>TSP: 2 Search API, old PAN
+    TSP->>TAS: 3 PAR, TUR, merchant
+    Note over TAS: Fork here, both branches run concurrently
+    par eMandate branch, silent
+        TAS->>Issuer: 4a Unique ID
+        TAS->>SiHub: 4b Send PAR
+        SiHub->>TAS: 5 eMandate tokens
+        TAS->>TSP: 6 Search API, tokens
+        TSP->>TAS: 7 TUR list
+        TAS->>TSP: 8 Token update, new PAN
+        TSP->>TAS: 9 Acknowledgement
+        TAS->>TSP: 10 Search API, new PAN
+        TSP->>TAS: 11 New PAR
+        TAS->>SiHub: 12 Update token, new PAR
+        SiHub->>TAS: 13 Acknowledgement
+    and Ecom branch, customer-driven
+        TAS->>SiHub: 14 Ecom tagging notification
+        TAS->>Issuer: 15 Notification call
+        Issuer->>User: 16 Send notification
+        User->>Issuer: Click consent link
+        Issuer->>TAS: Card fetch
+        TAS->>Issuer: Card fetch response
+        TAS->>TSP: Search API, current PAN
+        TSP->>TAS: PAR, TUR, merchant
+        TAS->>User: Updated merchant list
+        User->>TAS: Selected merchants
+        TAS->>Issuer: ACS 2FA request
+        Issuer->>User: 2FA notification
+        User->>Issuer: 2FA response
+        Issuer->>TAS: 2FA completed
+        TAS->>TSP: Token update, Ecom TURs
+        TSP->>TAS: Acknowledgement
+        Note over TAS,SiHub: Reconciliation, sync eMandate tokens against old PAR
+        TAS->>SiHub: Send old PAR
+        SiHub->>TAS: eMandate token statuses
+        TAS->>SiHub: Update ready tokens, new PAR
+        Note over TAS: Not-yet-ready tokens stay PENDING
+        SiHub->>TAS: Acknowledgement
+    end`;
+const { svg } = await mermaid.render('seq-svg', src);
+document.getElementById('seq').innerHTML = svg;
+</script>
