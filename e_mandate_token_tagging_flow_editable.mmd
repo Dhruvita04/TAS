@@ -1,0 +1,77 @@
+flowchart LR
+    %% E-MANDATE TOKEN TAGGING FLOW (TAG WITHOUT AFA)
+    %% Editable Mermaid source
+
+    U["USER<br/>Customer<br/><br/>Receives notifications<br/>gives consent<br/>authenticates<br/>checks status"]
+    I["ISSUER<br/>(Bank)"]
+    T["TAS<br/>(Token Aggregation System)<br/><b>BASE END POINT</b>"]
+    A["AEROSPIKE<br/>(In-Memory Store)<br/><br/>Stores card details temporarily<br/>(epoch based TTL)"]
+    S["SIHUB<br/>(Standing Instruction Hub)"]
+    P["TSP<br/>(VISA / MASTERCARD)"]
+    O["ORACLE DB<br/>(Mapping Status & Logs)"]
+    K["KAFKA<br/>(Notification Topic)"]
+
+    I -->|"1. POST /tas/token/rebind_id<br/>Issuer initiates token mapping with old and new card details"| T
+
+    T -->|"1a. Store card details temporarily<br/>(epoch based TTL)"| A
+    A -.->|"Card details stored"| T
+
+    T -->|"2. Initiate Search API<br/>(Using Old PAN)"| S
+    S -->|"2a. Search API (Old PAN)"| P
+    P -->|"2b. Search API Response<br/>(PAR, TUR, Merchant Name)"| S
+    S -->|"3. Search API Response<br/>(PAR, TUR, Merchant Name)"| T
+
+    T -->|"4. Send PAR"| S
+    S -->|"5. E-mandate Tokens<br/>(PAR, Merchant Name, etc.)"| T
+
+    subgraph LOOP["For each token (n) — one thread per token"]
+        T -->|"6. Initiate Search API<br/>(E-mandate Token n)"| S
+        S -->|"6a. Search API (Token n)"| P
+        P -->|"6b. Search API Response<br/>(Token Unique Reference TURn)"| S
+        S -->|"6c. Token Update API<br/>(Update eMandate TUR n with New PAN)"| P
+        P -->|"6d. Update TUR n<br/>(with New PAN)"| S
+        S -->|"6e. Acknowledgement"| T
+    end
+
+    T -->|"7. Initiate Search API<br/>(Using New PAN)"| S
+    S -->|"7a. Search API (New PAN)"| P
+    P -->|"7b. Search API Response (PAR)"| S
+    S -->|"8. Search API response (PAR)"| T
+
+    T -->|"9. Update (Token, PAR)"| S
+    S -->|"9a. Update Mapping Status (Token, PAR)"| P
+    P -->|"9b. Acknowledgement"| S
+
+    T -->|"10. Initiate eCom token tagging notification<br/>(customer consent as CTA)"| S
+    S -->|"11. Update Mapping Status / Log"| O
+
+    T -->|"12. Publish Notification (Status / Result)"| K
+
+    %% Required notification chain:
+    K -->|"13. Notification to SiHub<br/>(Status / Result)"| S
+    S -->|"14. Notification to TAS<br/>(Status / Result)"| T
+
+    S -->|"15. Notification call to Issuer"| I
+    I -->|"16. Issuer sends notification / checks status"| U
+
+    I -->|"4a. Send Unique ID<br/>(Issuer to maintain Old Card,<br/>New Card to Unique ID mapping)"| T
+
+    classDef user fill:#eef5ff,stroke:#4775d1,stroke-width:2px;
+    classDef issuer fill:#f2faee,stroke:#8bb174,stroke-width:2px;
+    classDef tas fill:#eef3ff,stroke:#7192dc,stroke-width:2px;
+    classDef aero fill:#effbfb,stroke:#64aeb7,stroke-width:2px;
+    classDef sihub fill:#f7efff,stroke:#a080c7,stroke-width:2px;
+    classDef tsp fill:#fff7e8,stroke:#e3b45d,stroke-width:2px;
+    classDef db fill:#f6efff,stroke:#8064a2,stroke-width:2px;
+    classDef kafka fill:#fff0f0,stroke:#e53935,stroke-width:2px;
+
+    class U user;
+    class I issuer;
+    class T tas;
+    class A aero;
+    class S sihub;
+    class P tsp;
+    class O db;
+    class K kafka;
+
+    style LOOP fill:#fbf8ff,stroke:#7030a0,stroke-width:2px,stroke-dasharray:6 4
